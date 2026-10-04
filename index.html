@@ -8,6 +8,7 @@
       name="description"
       content="El viaje de una petición web en 3D: DNS, CDN, balanceador, API, caché y base de datos, con las averías típicas de producción."
     />
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -17,6 +18,24 @@
   </head>
   <body>
     <div id="viewport"></div>
+
+    <header class="hud hud-title">
+      <div class="brand">
+        <span class="brand__mark" id="brand-mark"></span>
+        <div>
+          <h1>Request Journey 3D</h1>
+          <p>El viaje de una petición web, de tu navegador a la base de datos</p>
+        </div>
+      </div>
+      <div class="hud-actions" id="hud-actions"></div>
+    </header>
+
+    <nav id="actions" class="hud actions" aria-label="Acciones"></nav>
+    <aside id="infra-panel" class="hud panel" aria-label="Infraestructura"></aside>
+    <aside id="node-panel" class="hud node-panel" aria-label="Equipo seleccionado" hidden></aside>
+    <div id="caption" class="hud caption" role="status" aria-live="polite" hidden></div>
+    <section id="devtools" class="hud devtools" aria-label="Herramientas de desarrollo"></section>
+
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

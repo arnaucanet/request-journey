@@ -32,6 +32,11 @@ export class PacketAnimator {
     return done.every(Boolean);
   }
 
+  // Pausa medida en tiempo de animación (respeta la velocidad y se corta con cancel())
+  wait(seconds) {
+    return this.#delay(seconds, this.generation);
+  }
+
   cancel() {
     this.generation++;
     this.packets.forEach((p) => this.#remove(p, false));
@@ -44,7 +49,9 @@ export class PacketAnimator {
     let k = 0;
     while (k < hops.length) {
       if (generation !== this.generation) return false;
-      if (hops[k].stream) {
+      if (hops[k].kind === 'mark') {
+        this.onMark?.(hops[k++]); // aviso sobre un equipo: no viaja, se muestra al momento
+      } else if (hops[k].stream) {
         const burst = [];
         while (k < hops.length && hops[k].stream) burst.push(hops[k++]);
         await this.#playStream(burst, generation);
