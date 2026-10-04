@@ -47,7 +47,7 @@ export const NODES = [
     kind: 'server',
     label: 'API 1',
     service: 'Amazon EC2 · Node.js',
-    role: 'Ejecuta el código del backend: consulta la caché y, si no está ahí, la base de datos.',
+    role: 'Una instancia EC2 (una máquina virtual en AWS) con el backend en Node.js. Consulta la caché y, si no está ahí, la base de datos.',
     canFail: true,
   },
   {
@@ -55,7 +55,7 @@ export const NODES = [
     kind: 'server',
     label: 'API 2',
     service: 'Amazon EC2 · Node.js',
-    role: 'Segunda instancia de la misma API, para repartir carga y aguantar si cae la otra.',
+    role: 'Segunda instancia EC2 con la misma API, en otra zona de disponibilidad: reparte la carga y aguanta si cae la otra.',
     canFail: true,
   },
   {

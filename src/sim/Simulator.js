@@ -45,6 +45,8 @@ export class Simulator {
   setDown(id, down) {
     if (down) this.down.add(id);
     else this.down.delete(id);
+    // Redis vive en memoria: si el nodo cae, vuelve vacío
+    if (id === 'cache' && down) this.redis.clear();
     this.events.emit('change', { type: 'node', id, down });
   }
 
@@ -73,16 +75,25 @@ export class Simulator {
   // Carga la página como un navegador: primero el HTML, luego JS y CSS en paralelo
   // y, cuando el JavaScript se ha descargado, la llamada a la API
   loadPage() {
-    const page = this.fetch('/');
+    const [page] = this.fetchAll(['/']);
     if (!page.ok) return [page];
-    const parallelStart = this.now;
-    const script = this.fetch('/app.js');
-    const scriptEnd = this.now;
-    this.now = parallelStart;
-    const styles = this.fetch('/styles.css');
-    this.now = Math.max(scriptEnd, this.now);
+    const [script, styles] = this.fetchAll(['/app.js', '/styles.css']);
     if (!script.ok) return [page, script, styles];
     return [page, script, styles, this.fetchApi()];
+  }
+
+  // Varias peticiones a la vez: todas salen en el mismo instante y el reloj avanza hasta la última
+  fetchAll(paths) {
+    const start = this.now;
+    let end = start;
+    const results = paths.map((path) => {
+      this.now = start;
+      const result = this.fetch(path, { crossOrigin: Boolean(RESOURCES[path]?.api) && this.flags.crossOriginApi });
+      end = Math.max(end, this.now);
+      return result;
+    });
+    this.now = end;
+    return results;
   }
 
   fetchApi() {
