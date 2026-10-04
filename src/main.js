@@ -10,7 +10,11 @@ import { ActionBar, SPEEDS } from './ui/ActionBar.js';
 import { DevTools } from './ui/DevTools.js';
 import { InfraPanel, statusOf } from './ui/InfraPanel.js';
 import { NodePanel } from './ui/NodePanel.js';
+import { ScenarioMenu } from './ui/ScenarioMenu.js';
+import { Caption } from './ui/Caption.js';
 import { icon } from './ui/icons.js';
+import { SCENARIOS } from './scenarios/index.js';
+import { ScenarioRunner } from './scenarios/ScenarioRunner.js';
 
 // Crea las piezas y las conecta. El simulador calcula cada petición al instante; aquí se anima
 // su recorrido y, cuando el paquete vuelve al navegador, se completa la fila de las DevTools.
@@ -21,7 +25,7 @@ const animator = new PacketAnimator(sceneManager, view);
 const notes = new Notes(sceneManager, view);
 const sim = new Simulator();
 
-const state = { busy: false, speed: 0 };
+const state = { busy: false, speed: 0, page: [], last: [] };
 
 document.getElementById('brand-mark').innerHTML = icon('brand', 22);
 
@@ -33,7 +37,7 @@ const infraPanel = new InfraPanel(document.getElementById('infra-panel'), sim, {
 });
 const actionBar = new ActionBar(document.getElementById('actions'), {
   load: () => run(loadPage),
-  api: () => run(callApi),
+  api: () => run(() => callApi()),
   burst: () => run(() => burst(8)),
   time: () => run(() => passTime(10)),
   caches: () => clearCaches(),
@@ -57,14 +61,14 @@ function renderActions() {
 }
 
 // ───────── Acciones ─────────
-// Todas devuelven true si la animación terminó y false si se cortó a medias
+// Las que lanzan peticiones devuelven los resultados del simulador (los usan los escenarios)
 
 async function run(action) {
-  if (state.busy) return false;
+  if (state.busy || runner.running) return;
   state.busy = true;
   renderActions();
   try {
-    return await action();
+    await action();
   } finally {
     state.busy = false;
     renderActions();
@@ -74,37 +78,46 @@ async function run(action) {
 // Anima una tanda de peticiones a la vez: filas pendientes, viaje de los paquetes y filas completas
 async function animateRequests(results) {
   results.forEach((r) => devtools.add(r));
-  const completed = await animator.play(results.map((r) => r.hops));
+  state.page.push(...results);
+  state.last = results;
+  await animator.play(results.map((r) => r.hops));
   results.forEach((r) => devtools.complete(r));
   sync();
-  return completed;
+  return results;
 }
 
 // El navegador pide el HTML; después el JS y el CSS a la vez; y cuando llega el JS, la API
 async function loadPage() {
-  devtools.clear();
+  newPage();
   const [page, ...rest] = sim.loadPage();
   const groups = [[page], rest.filter((r) => r.type !== 'fetch'), rest.filter((r) => r.type === 'fetch')];
+  const generation = animator.generation;
   for (const group of groups.filter((g) => g.length)) {
-    if (!(await animateRequests(group))) return false;
+    await animateRequests(group);
+    if (generation !== animator.generation) break; // se ha cancelado a medias
   }
-  return true;
+  return [page, ...rest];
 }
 
-async function callApi() {
-  return animateRequests([sim.fetchApi()]);
+// Como al navegar a una página nueva: Network y Console empiezan de cero
+function newPage() {
+  devtools.clear();
+  state.page = [];
 }
+
+const fetchPaths = (paths) => animateRequests(sim.fetchAll(paths));
+const callApi = () => animateRequests([sim.fetchApi()]);
 
 // Varias llamadas seguidas: cada una sale medio segundo después de la anterior
 async function burst(count) {
   const results = sim.burst(count);
-  const done = await Promise.all(
+  await Promise.all(
     results.map(async (result, k) => {
-      if (!(await animator.wait(k * 0.5))) return false;
-      return animateRequests([result]);
+      if (await animator.wait(k * 0.5)) await animateRequests([result]);
     }),
   );
-  return done.every(Boolean);
+  state.last = results;
+  return results;
 }
 
 // Avanza el reloj: el balanceador hace sus health checks cada 10 s simulados
@@ -113,15 +126,95 @@ async function passTime(seconds) {
   for (const check of sim.advance(seconds * 1000)) {
     const completed = await animator.play(check.tracks);
     sync();
-    if (!completed) return false;
+    if (!completed) return;
   }
-  return true;
 }
 
 function clearCaches() {
   sim.clearCaches();
   for (const id of ['browser', 'cdn', 'cache']) notes.on(id, 'Caché vacía', 'info');
 }
+
+// Tiempo desde la primera petición hasta la última respuesta, como el "Finish" de DevTools
+const span = (results) =>
+  results.length
+    ? Math.max(...results.map((r) => r.timing.start + r.timing.total)) - Math.min(...results.map((r) => r.timing.start))
+    : 0;
+
+// ───────── Escenarios ─────────
+// El contexto es la única forma que tiene un escenario de actuar sobre la app.
+// tests/scenarios.test.js construye uno equivalente sin escena.
+const waits = new Set();
+const scenarioContext = {
+  prepare() {
+    animator.cancel();
+    nodePanel.close();
+  },
+  abort() {
+    animator.cancel();
+    waits.forEach((cancel) => cancel());
+  },
+  // Todo encendido, sin fallos y con las cachés vacías
+  reset() {
+    animator.cancel();
+    sim.reset();
+    devtools.clear(true);
+    state.page = [];
+    state.last = [];
+    sync();
+  },
+  newPage,
+  // Visita previa sin animar, para partir con las cachés llenas. Devuelve lo que tardó
+  warmUp({ page = true } = {}) {
+    const results = page ? sim.loadPage() : [sim.fetchApi()];
+    sync();
+    return span(results);
+  },
+  fetch: fetchPaths,
+  loadPage,
+  callApi,
+  burst,
+  passTime,
+  clearCaches,
+  setDown: (id, down) => sim.setDown(id, down),
+  setFlag: (name, value) => sim.setFlag(name, value),
+  focus: (id) => (id === 'home' ? sceneManager.resetView() : sceneManager.focusOn(view.topOf(id), 15)),
+  note: (id, text, tone) => notes.on(id, text, tone),
+  select: selectNode,
+  showTab: (tab) => devtools.show(tab),
+  selectRequest: (name) => devtools.selectByName(name),
+  last: () => state.last,
+  pageTime: () => span(state.page),
+  wait: (ms) =>
+    new Promise((resolve) => {
+      const done = () => {
+        clearTimeout(timer);
+        waits.delete(done);
+        resolve();
+      };
+      const timer = setTimeout(done, ms / animator.speed);
+      waits.add(done);
+    }),
+};
+
+const runner = new ScenarioRunner(scenarioContext);
+new ScenarioMenu(document.getElementById('hud-actions'), SCENARIOS, {
+  onRun: (scenario) => runner.run(scenario),
+  onGuidedChange: (guided) => (runner.guided = guided),
+});
+new Caption(document.getElementById('caption'), runner);
+runner.events.on('start', () => {
+  state.busy = true;
+  renderActions();
+});
+runner.events.on('end', () => {
+  state.busy = false;
+  renderActions();
+});
+
+// Enlace directo a un escenario (?escenario=cors), para compartirlo; arranca tras la intro
+const linked = SCENARIOS.find((s) => s.id === new URLSearchParams(location.search).get('escenario'));
+if (linked) setTimeout(() => runner.run(linked), 2800);
 
 // ───────── Estado de la escena y los paneles ─────────
 
@@ -167,7 +260,7 @@ window.addEventListener('keydown', (event) => {
   if (event.ctrlKey || event.metaKey || event.altKey) return;
   const actions = {
     KeyL: () => run(loadPage),
-    KeyA: () => run(callApi),
+    KeyA: () => run(() => callApi()),
     KeyR: () => sceneManager.resetView(),
     Escape: () => nodePanel.close(),
   };
@@ -190,6 +283,7 @@ if (import.meta.env.DEV) {
     devtools,
     state,
     run,
+    runner,
     loadPage,
     callApi,
     burst,

@@ -143,6 +143,12 @@ export class DevTools {
     return `<div class="waterfall" style="margin-left:${pct(r.timing.start - start)}">${segments || '<i class="wf wf--cache" style="width:2px"></i>'}</div>`;
   }
 
+  // Abre el detalle de la última petición con ese nombre (lo usan los escenarios)
+  selectByName(name) {
+    const match = [...this.rows.values()].filter((row) => row.result.name === name).at(-1);
+    if (match) this.#select(match.result.id);
+  }
+
   #select(id) {
     this.selected = id;
     this.rows.forEach((_, rowId) => this.#renderRow(rowId));
