@@ -247,6 +247,8 @@ function updateInsets() {
   const panel = document.getElementById('infra-panel');
   const dock = document.getElementById('devtools');
   sceneManager.setInsets({
+    // En móvil los controles van arriba, uno debajo de otro
+    top: narrow ? panel.getBoundingClientRect().bottom : 0,
     right: narrow || panel.classList.contains('is-collapsed') ? 0 : panel.offsetWidth + 16,
     bottom: dock.offsetHeight + 16,
   });

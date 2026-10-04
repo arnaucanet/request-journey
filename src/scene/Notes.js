@@ -7,9 +7,14 @@ export class Notes {
     this.scene = sceneManager.scene;
     this.view = view;
     this.stacks = new Map(); // notas visibles por equipo, para apilarlas sin que se solapen
+    this.visible = new Set(); // "equipo|texto" de las notas en pantalla, para no repetirlas
   }
 
   on(nodeId, text, tone = 'info') {
+    // En una ráfaga la misma nota saldría ocho veces: con una basta
+    const key = `${nodeId}|${text}`;
+    if (this.visible.has(key)) return;
+    this.visible.add(key);
     const index = this.stacks.get(nodeId) ?? 0;
     this.stacks.set(nodeId, index + 1);
 
@@ -28,6 +33,7 @@ export class Notes {
       'animationend',
       () => {
         this.scene.remove(label);
+        this.visible.delete(key);
         this.stacks.set(nodeId, Math.max((this.stacks.get(nodeId) ?? 1) - 1, 0));
       },
       { once: true },

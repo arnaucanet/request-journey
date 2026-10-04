@@ -44,6 +44,8 @@ export class DevTools {
         <section data-panel="logs" hidden><ol class="logs" data-logs></ol></section>
       </div>`;
 
+    // En móvil empieza plegado para dejar sitio a la escena
+    if (window.matchMedia('(max-width: 900px)').matches) el.classList.add('is-collapsed');
     el.querySelectorAll('[data-tab]').forEach((tab) => tab.addEventListener('click', () => this.show(tab.dataset.tab)));
     el.querySelector('[data-clear]').addEventListener('click', () => this.clear(true));
     el.querySelector('[data-collapse]').addEventListener('click', () => {
@@ -197,6 +199,7 @@ export class DevTools {
     const end = Math.max(...done.map((x) => x.timing.start + x.timing.total));
     const transferred = done.reduce((sum, x) => sum + (x.fromCache ? 0 : x.size), 0);
     this.el.querySelector('[data-summary]').textContent =
-      `${done.length} peticiones · ${bytes(transferred)} transferidos · terminado en ${ms(end - start)}`;
+      `${done.length} ${done.length === 1 ? 'petición' : 'peticiones'} · ${bytes(transferred)} transferidos · ` +
+      `terminado en ${ms(end - start)}`;
   }
 }
