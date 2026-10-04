@@ -1,0 +1,209 @@
+:root {
+  --bg: #0d1015;
+  --panel: rgba(17, 21, 27, 0.86);
+  --panel-solid: #12161c;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --text: #e6eaef;
+  --muted: #8a94a3;
+  --faint: #5b6573;
+  --dns: #e5c07b;
+  --request: #6ea8ff;
+  --response: #7fd18b;
+  --query: #c792ea;
+  --health: #9aa6b5;
+  --error: #ff6b6b;
+  --warning: #f0b35a;
+  --radius: 10px;
+  --font: 'IBM Plex Sans', system-ui, sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.45 var(--font);
+  -webkit-font-smoothing: antialiased;
+}
+
+#viewport {
+  position: fixed;
+  inset: 0;
+}
+
+#viewport canvas {
+  display: block;
+}
+
+.label-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* ───────────── Etiquetas 3D ───────────── */
+.device-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  white-space: nowrap;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+}
+
+.device-label strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.device-label span {
+  font: 10.5px var(--mono);
+  color: var(--muted);
+}
+
+.device-label__badge {
+  margin-bottom: 3px;
+  padding: 1px 6px;
+  border-radius: 5px;
+  font: normal 500 10.5px var(--mono);
+  color: var(--text);
+  background: rgba(18, 22, 28, 0.9);
+  border: 1px solid var(--border-strong);
+}
+
+.device-label.is-down strong {
+  color: var(--error);
+}
+
+.device-label.is-down .device-label__badge {
+  color: var(--error);
+  border-color: color-mix(in srgb, var(--error) 50%, transparent);
+}
+
+.device-label.is-unhealthy strong {
+  color: var(--warning);
+}
+
+.device-label.is-unhealthy .device-label__badge {
+  color: var(--warning);
+  border-color: color-mix(in srgb, var(--warning) 50%, transparent);
+}
+
+.zone-label {
+  display: flex;
+  flex-direction: column;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--faint);
+  white-space: nowrap;
+}
+
+.zone-label strong {
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.zone-label span {
+  text-transform: none;
+  letter-spacing: 0;
+  font-family: var(--mono);
+}
+
+.packet-label {
+  padding: 1px 6px;
+  border-radius: 5px;
+  font: 500 10.5px var(--mono);
+  white-space: nowrap;
+  color: var(--text);
+  background: rgba(13, 16, 21, 0.88);
+  border: 1px solid currentColor;
+}
+
+.packet-label--dns {
+  color: var(--dns);
+}
+
+.packet-label--request {
+  color: var(--request);
+}
+
+.packet-label--response {
+  color: var(--response);
+}
+
+.packet-label--query,
+.packet-label--reply {
+  color: var(--query);
+}
+
+.packet-label--health {
+  color: var(--health);
+}
+
+.packet-label--error {
+  color: var(--error);
+}
+
+/* Notas flotantes: suben y se desvanecen */
+.fx-note {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font: 500 12px var(--mono);
+  white-space: nowrap;
+  background: var(--panel-solid);
+  border: 1px solid var(--border-strong);
+  transform: translateY(calc(var(--stack, 0) * -26px));
+  animation: note-rise 3.4s ease-out forwards;
+}
+
+.fx-note--error {
+  color: var(--error);
+  border-color: color-mix(in srgb, var(--error) 45%, transparent);
+}
+
+.fx-note--success {
+  color: var(--response);
+  border-color: color-mix(in srgb, var(--response) 45%, transparent);
+}
+
+.fx-note--warning {
+  color: var(--warning);
+  border-color: color-mix(in srgb, var(--warning) 45%, transparent);
+}
+
+.fx-note--info {
+  color: var(--request);
+  border-color: color-mix(in srgb, var(--request) 45%, transparent);
+}
+
+@keyframes note-rise {
+  0% {
+    opacity: 0;
+    translate: 0 8px;
+  }
+  12% {
+    opacity: 1;
+    translate: 0 0;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    translate: 0 -22px;
+  }
+}
