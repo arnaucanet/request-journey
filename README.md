@@ -152,4 +152,4 @@ Cada push a `main` pasa formato, lint, tests y build en GitHub Actions y, si tod
 
 ## Licencia
 
-MIT
+[MIT](LICENSE)
