@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { Simulator } from '../src/sim/Simulator.js';
 
-const hopsTo = (result, node, kind) => result.hops.filter((h) => h.to === node && (!kind || h.kind === kind));
+// Tramos que viajan por un cable (las marcas son solo avisos sobre un equipo)
+const travel = (result) => result.hops.filter((h) => h.kind !== 'mark');
+const marks = (result) => result.hops.filter((h) => h.kind === 'mark').map((h) => `${h.at}: ${h.label}`);
+const hopsTo = (result, node, kind) => travel(result).filter((h) => h.to === node && (!kind || h.kind === kind));
 const byName = (results, name) => results.find((r) => r.name === name);
 
 let sim;
@@ -44,7 +47,9 @@ describe('segunda visita', () => {
     const warm = sim.loadPage();
 
     expect(byName(warm, 'app.js').fromCache).toBe('disk');
-    expect(byName(warm, 'app.js').hops).toHaveLength(0);
+    expect(travel(byName(warm, 'app.js'))).toHaveLength(0);
+    expect(marks(byName(warm, 'app.js'))).toEqual(['browser: app.js (disk cache)']);
+    expect(marks(warm[0])).toEqual(['cdn: HIT']);
     expect(warm[0].headers.response['x-cache']).toBe('Hit from cloudfront');
     expect(warm[0].timing.dns).toBe(0);
     expect(warm[0].timing.connect).toBe(0);
@@ -71,6 +76,7 @@ describe('consultas N+1', () => {
     const slow = sim.fetchApi();
     expect(hopsTo(slow, 'db', 'query')).toHaveLength(51);
     expect(slow.logs.filter((l) => l.level === 'sql')).toHaveLength(51);
+    expect(marks(slow)).toContain('db: 51 consultas');
 
     sim.setFlag('nPlusOne', false);
     sim.clearCaches();
@@ -141,6 +147,7 @@ describe('CORS', () => {
     expect(result.headers.request.origin).toBe('https://tienda.example');
     expect(result.status).toBe(200);
     expect(result.blocked).toBe('cors');
+    expect(marks(result).at(-1)).toBe('browser: Bloqueada por CORS');
     expect(result.ok).toBe(false);
     expect(result.logs.some((l) => l.text.startsWith('GET /api/products 200'))).toBe(true);
     expect(result.console[0].text).toContain('has been blocked by CORS policy');
@@ -174,7 +181,8 @@ describe('otras averías', () => {
     sim.setDown('dns', true);
     const [page] = sim.loadPage();
     expect(page.error).toBe('ERR_NAME_NOT_RESOLVED');
-    expect(page.hops.map((h) => h.to)).toEqual(['dns', 'browser']);
+    expect(travel(page).map((h) => h.to)).toEqual(['dns', 'browser']);
+    expect(marks(page)).toEqual(['browser: ERR_NAME_NOT_RESOLVED']);
   });
 
   it('base de datos caída: 500', () => {

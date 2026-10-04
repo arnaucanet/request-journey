@@ -109,6 +109,7 @@ export class Simulator {
     // 1. Caché del navegador: los archivos inmutables ni siquiera salen a la red
     if (this.browserCache.has(path)) {
       j.fromDiskCache(L.diskCache);
+      j.mark('browser', `${resource.name} (disk cache)`, 'success');
       return this.#finish(j);
     }
 
@@ -122,6 +123,7 @@ export class Simulator {
       j.hop('browser', edge, 'request', oneWay, 'conectar');
       j.hop(edge, 'browser', 'error', oneWay, 'sin respuesta');
       j.fail('ERR_CONNECTION_TIMED_OUT', 2 * oneWay);
+      j.mark('browser', 'ERR_CONNECTION_TIMED_OUT', 'error');
       this.connections.delete(host);
       return this.#finish(j);
     }
@@ -139,7 +141,10 @@ export class Simulator {
     j.respond(answer.status, answer.headers, 2 * oneWay + answer.ms, download);
 
     // 5. CORS: la respuesta ya ha llegado, pero el navegador decide si el JavaScript puede leerla
-    if (origin && answer.status < 400 && !answer.headers['access-control-allow-origin']) j.blockByCors(origin);
+    if (origin && answer.status < 400 && !answer.headers['access-control-allow-origin']) {
+      j.blockByCors(origin);
+      j.mark('browser', 'Bloqueada por CORS', 'error');
+    }
 
     if (answer.status === 200 && resource.cacheControl.includes('immutable')) this.browserCache.add(path);
     return this.#finish(j);
@@ -158,6 +163,7 @@ export class Simulator {
     if (this.isDown('dns')) {
       j.hop('dns', 'browser', 'error', L.browserToDns, 'sin respuesta');
       j.fail('ERR_NAME_NOT_RESOLVED', 2 * L.browserToDns);
+      j.mark('browser', 'ERR_NAME_NOT_RESOLVED', 'error');
       return false;
     }
     this.stats.dns.requests++;
@@ -192,6 +198,7 @@ export class Simulator {
     const storedAt = this.cdnCache.get(j.path);
     if (storedAt !== undefined) {
       this.stats.cdn.hits++;
+      j.mark('cdn', 'HIT', 'success');
       const age = String(Math.round((this.now - storedAt) / 1000));
       return {
         status: 200,
@@ -201,6 +208,7 @@ export class Simulator {
     }
 
     this.stats.cdn.misses++;
+    j.mark('cdn', 'MISS: se pide a S3', 'warning');
     j.hop('cdn', 's3', 'request', L.cdnToOrigin, `GET ${j.path}`);
     if (this.isDown('s3')) {
       j.hop('s3', 'cdn', 'error', L.cdnToOrigin, 'sin respuesta');
@@ -223,6 +231,7 @@ export class Simulator {
     const target = this.#pickTarget();
     if (!target) {
       j.log('alb', 'No hay ningún servidor sano: 503 Service Unavailable', 'error');
+      j.mark('alb', '503: ningún servidor sano', 'error');
       return { status: 503, headers: {}, ms: 1 };
     }
 
@@ -231,6 +240,7 @@ export class Simulator {
     if (this.isDown(target)) {
       j.hop(target, 'alb', 'error', L.albToApi, 'conexión rechazada');
       j.log('alb', `${nodeById(target).label} no responde: 502 Bad Gateway`, 'error');
+      j.mark('alb', `502: ${nodeById(target).label} no responde`, 'error');
       this.stats[target].errors++;
       return { status: 502, headers: {}, ms: 2 * L.albToApi + 1 };
     }
@@ -263,6 +273,7 @@ export class Simulator {
       if (this.rate.count > RATE_LIMIT.max) {
         const retryAfter = Math.ceil((windowStart + RATE_LIMIT.windowMs - this.now) / 1000);
         j.log(server, `GET /api/products 429 · más de ${RATE_LIMIT.max} peticiones en 10 s`, 'warn');
+        j.mark(server, `429: espera ${retryAfter} s`, 'error');
         return { status: 429, headers: { ...headers, 'retry-after': String(retryAfter) }, ms: 1 };
       }
     }
@@ -281,6 +292,7 @@ export class Simulator {
       j.hop('db', server, 'error', L.apiToDb, 'ECONNREFUSED');
       j.log(server, 'Error: connect ECONNREFUSED db:5432', 'error');
       j.log(server, 'GET /api/products 500', 'error');
+      j.mark(server, '500 Internal Server Error', 'error');
       this.stats[server].errors++;
       return { status: 500, headers, ms: ms + 2 * L.apiToDb };
     }
@@ -293,6 +305,11 @@ export class Simulator {
       ms += 2 * L.apiToDb + query.ms;
       this.stats.db.requests++;
     }
+    j.mark(
+      'db',
+      queries.length === 1 ? '1 consulta' : `${queries.length} consultas`,
+      queries.length > 1 ? 'error' : 'info',
+    );
 
     // 3. Se guarda en la caché para las siguientes peticiones
     if (!this.isDown('cache')) {
@@ -301,7 +318,8 @@ export class Simulator {
       j.log(server, 'Redis SET products EX 60');
       ms += L.apiToCache;
     }
-    j.log(server, `GET /api/products 200 · ${round(ms)} ms (${queries.length} consultas)`);
+    const count = queries.length === 1 ? '1 consulta' : `${queries.length} consultas`;
+    j.log(server, `GET /api/products 200 · ${round(ms)} ms (${count})`);
     return { status: 200, headers, ms };
   }
 
@@ -310,12 +328,14 @@ export class Simulator {
     if (this.isDown('cache')) {
       j.hop('cache', server, 'error', L.apiToCache, 'ECONNREFUSED');
       j.log(server, 'Redis no responde (ECONNREFUSED cache:6379): se va a la base de datos', 'warn');
+      j.mark(server, 'Sin Redis: a la base de datos', 'warning');
       return { hit: false, ms: 2 * L.apiToCache };
     }
     const expires = this.redis.get('products');
     const hit = expires !== undefined && expires > this.now;
     this.stats.cache[hit ? 'hits' : 'misses']++;
     j.hop('cache', server, 'reply', L.apiToCache, hit ? 'HIT' : '(nil)');
+    j.mark('cache', hit ? 'HIT' : 'MISS', hit ? 'success' : 'warning');
     j.log(server, `Redis GET products → ${hit ? 'HIT' : '(nil)'}`);
     return { hit, ms: 2 * L.apiToCache + L.cacheLookup };
   }
@@ -378,6 +398,19 @@ export class Simulator {
         state.healthy = !state.healthy;
         state.streak = 0;
       }
+      const label = nodeById(id).label;
+      const track = tracks.at(-1);
+      if (changed) {
+        track.push(
+          mark(
+            'alb',
+            state.healthy ? `${label} vuelve al balanceador` : `${label} fuera del balanceador`,
+            state.healthy ? 'success' : 'error',
+          ),
+        );
+      } else if (state.streak) {
+        track.push(mark('alb', `${label}: ${state.streak} de ${threshold} comprobaciones`, 'warning'));
+      }
       return { id, ok, healthy: state.healthy, changed, streak: state.streak };
     });
     const check = { at: this.now, results, tracks };
@@ -387,3 +420,4 @@ export class Simulator {
 }
 
 const round = (ms) => Math.round(ms * 10) / 10;
+const mark = (at, label, tone) => ({ kind: 'mark', from: at, to: at, at, label, tone, ms: 0 });

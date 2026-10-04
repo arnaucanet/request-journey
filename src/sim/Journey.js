@@ -42,6 +42,12 @@ export class Journey {
     this.hops.push({ from, to, kind, ms, label, ...extra });
   }
 
+  // Marca: un momento a destacar en un equipo (HIT, MISS, 502...). No es un viaje: va en la lista
+  // de hops para que la escena la muestre justo cuando el paquete llega a ese punto
+  mark(at, label, tone = 'info') {
+    this.hops.push({ kind: 'mark', from: at, to: at, at, label, tone, ms: 0 });
+  }
+
   log(source, text, level = 'info') {
     this.logs.push({ source, text, level });
   }
