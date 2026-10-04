@@ -112,10 +112,10 @@ export class SceneManager {
     if (!width || !height) return;
     this.camera.aspect = width / height;
     // En vertical se abre el campo de visión para que quepa toda la infraestructura
-    this.camera.fov = width / height < 1 ? 62 : 36;
-    // Desplaza el centro de la imagen hacia el hueco que dejan los paneles (derecha y abajo)
-    const { right = 0, bottom = 0 } = this.insets ?? {};
-    this.camera.setViewOffset(width, height, right / 2, bottom / 2, width, height);
+    this.camera.fov = width / height < 1 ? 80 : 36;
+    // Desplaza el centro de la imagen hacia el hueco que dejan los paneles
+    const { top = 0, right = 0, bottom = 0 } = this.insets ?? {};
+    this.camera.setViewOffset(width, height, right / 2, (bottom - top) / 2, width, height);
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height);
     this.composer.setSize(width, height);
