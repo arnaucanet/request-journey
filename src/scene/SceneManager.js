@@ -7,7 +7,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { SCENE_COLORS } from './theme.js';
 
-const HOME = { position: new THREE.Vector3(0.5, 20, 25), target: new THREE.Vector3(0.5, 0, 0.6) };
+const HOME = { position: new THREE.Vector3(0.5, 23, 28.5), target: new THREE.Vector3(0.5, 0, 0.6) };
 const INTRO_FROM = new THREE.Vector3(-20, 30, 36);
 
 // Infraestructura 3D genérica: escena, cámara, luces, bucle de render y post-procesado.
@@ -113,11 +113,20 @@ export class SceneManager {
     this.camera.aspect = width / height;
     // En vertical se abre el campo de visión para que quepa toda la infraestructura
     this.camera.fov = width / height < 1 ? 62 : 36;
+    // Desplaza el centro de la imagen hacia el hueco que dejan los paneles (derecha y abajo)
+    const { right = 0, bottom = 0 } = this.insets ?? {};
+    this.camera.setViewOffset(width, height, right / 2, bottom / 2, width, height);
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height);
     this.composer.setSize(width, height);
     this.bloom.resolution.set(width, height);
     this.labelRenderer.setSize(width, height);
+  }
+
+  // Espacio que tapan los paneles de la interfaz, en píxeles
+  setInsets(insets) {
+    this.insets = insets;
+    this.#resize();
   }
 
   onUpdate(fn) {
