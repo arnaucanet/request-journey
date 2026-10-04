@@ -104,6 +104,13 @@ describe('Redis caído', () => {
     }
     expect(first.logs.some((l) => l.text.includes('ECONNREFUSED cache:6379'))).toBe(true);
   });
+
+  it('al volver está vacío: Redis guarda los datos en memoria', () => {
+    sim.fetchApi();
+    sim.setDown('cache', true);
+    sim.setDown('cache', false);
+    expect(hopsTo(sim.fetchApi(), 'db', 'query')).toHaveLength(1);
+  });
 });
 
 describe('servidor caído y health checks', () => {
